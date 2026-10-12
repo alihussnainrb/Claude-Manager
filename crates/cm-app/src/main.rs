@@ -23,6 +23,7 @@ use crate::platform::Platform;
 struct Args {
     background: bool,
     after_update: Option<u32>,
+    uninstall: bool,
     command: Option<Command>,
     dev_view: Option<String>,
 }
@@ -31,6 +32,7 @@ fn parse_args() -> Args {
     let mut args = Args {
         background: false,
         after_update: None,
+        uninstall: false,
         command: None,
         dev_view: None,
     };
@@ -39,6 +41,7 @@ fn parse_args() -> Args {
         match a.as_str() {
             "--background" => args.background = true,
             "--after-update" => args.after_update = it.next().and_then(|p| p.parse().ok()),
+            "--uninstall" => args.uninstall = true,
             "--dev-view" => args.dev_view = it.next(),
             "--launch" => args.command = it.next().map(|id| Command::Launch { id }),
             "--deeplink" => args.command = it.next().map(|url| Command::DeepLink { url }),
@@ -79,6 +82,12 @@ fn main() {
         return;
     };
     let _log_guard = init_logging(&paths);
+
+    // Run by the uninstaller: undo what we changed in Windows, then exit.
+    if args.uninstall {
+        uninstall(&paths);
+        return;
+    }
 
     // Started by our own updater: let the old version exit first so we can take the lock.
     if let Some(pid) = args.after_update {
@@ -160,4 +169,25 @@ fn main() {
             app::sync_platform(cx);
             app::start_update_loop(cx);
         });
+}
+
+/// Give `claude://` back to Claude Desktop and remove the startup entry.
+fn uninstall(paths: &cm_core::paths::Paths) {
+    let settings = cm_core::store::load_settings(paths).unwrap_or_default();
+    let fallback = cm_win::appx::find_claude().map(|i| format!("\"{}\" \"%1\"", i.exe.display()));
+    let ours = cm_win::registry::protocol_handler()
+        .ok()
+        .flatten()
+        .is_some_and(|h| h.contains("--deeplink"));
+    if ours {
+        if let Some(cmd) = settings.saved_protocol_handler.or(fallback) {
+            if let Err(e) = cm_win::registry::set_protocol_handler(&cmd) {
+                tracing::error!("couldn't restore the claude:// handler: {e}");
+            }
+        }
+    }
+    if let Err(e) = cm_win::registry::set_run_entry(None) {
+        tracing::error!("couldn't remove the startup entry: {e}");
+    }
+    tracing::info!("uninstall cleanup done");
 }

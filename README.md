@@ -19,7 +19,7 @@ Free and open source (MIT). Not affiliated with Anthropic.
 
 ## Download
 
-Get `claude-manager.exe` from the [latest release](https://github.com/alihussnainrb/Claude-Manager/releases/latest) and run it. It's a single portable exe; put it anywhere (for example `%LOCALAPPDATA%ProgramsClaude Manager`) and turn on "Open when Windows starts" in Settings.
+Download `ClaudeManager-Setup-<version>.exe` from the [latest release](https://github.com/alihussnainrb/Claude-Manager/releases/latest) and run it. It installs for your user only (no admin prompt) into `%LOCALAPPDATA%\Programs\Claude Manager` and adds a Start menu entry. Remove it from Settings → Apps; uninstalling gives `claude://` links back to Claude, and your profiles and their Claude data folders stay on disk.
 
 The exe isn't code-signed yet, so Windows SmartScreen may warn the first time: choose "More info", then "Run anyway".
 
@@ -49,7 +49,7 @@ cargo test --workspace
 
 ### Releasing
 
-Actions → **Release** → "Run workflow", and enter the new version (e.g. `0.2.0`). The workflow bumps `Cargo.toml`, commits, tags `v0.2.0`, builds, and publishes a GitHub Release with `claude-manager.exe` and its `.sha256`. Installed copies pick it up through the updater.
+Actions → **Release** → "Run workflow", and enter the new version (e.g. `0.2.0`). The workflow bumps `Cargo.toml`, commits, tags `v0.2.0`, builds, and publishes a GitHub Release with the installer (`ClaudeManager-Setup-0.2.0.exe`, built from `installer/claude-manager.iss` with Inno Setup), plus `claude-manager.exe` and its `.sha256` for the in-app updater.
 
 Or bump `version` in the root `Cargo.toml` yourself, commit, and push a tag: `git tag v0.2.0 && git push origin v0.2.0`.
 
