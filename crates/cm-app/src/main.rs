@@ -8,6 +8,7 @@ mod icons;
 mod model;
 mod platform;
 mod scan;
+mod taskbar;
 mod theme;
 mod ui;
 

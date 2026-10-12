@@ -221,6 +221,19 @@ impl SettingsView {
                         p,
                     ))
                     .child(set_row(
+                        "Give each profile its own taskbar button",
+                        Some(div().child("Shows the profile's colored icon instead of Claude's, and pins relaunch that profile.").into_any_element()),
+                        toggle("taskbar-icons", s.taskbar_icons, p).on_click(cx.listener(|this, _, _, cx| {
+                            this.model.update(cx, |m, cx| {
+                                m.update_settings(|s| s.taskbar_icons = !s.taskbar_icons);
+                                cx.notify();
+                            });
+                            crate::app::sync_taskbar(cx);
+                        })),
+                        false,
+                        p,
+                    ))
+                    .child(set_row(
                         "Tell me about new versions",
                         Some(div().child("Shows a notice when a newer release is on GitHub. Nothing installs automatically.").into_any_element()),
                         toggle("check-updates", s.check_for_updates, p).on_click(cx.listener(|this, _, _, cx| {

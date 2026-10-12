@@ -34,6 +34,7 @@ pub fn handle(ev: AppEvent, cx: &mut App) {
             if first {
                 on_first_scan(cx);
             }
+            sync_taskbar(cx);
         }
         AppEvent::Exited { id, pid, code } => {
             let relaunch = model.update(cx, |m, cx| {
@@ -227,5 +228,44 @@ pub fn apply_start_with_windows(m: &mut AppModel) {
     });
     if let Err(e) = result {
         m.notify_error(format!("Couldn't change the startup setting: {e}"));
+    }
+}
+
+/// Tag new Claude windows with their profile's taskbar identity; untag when turned off.
+pub fn sync_taskbar(cx: &mut App) {
+    if !cx.has_global::<Platform>() {
+        return;
+    }
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let model = model(cx);
+    let (tag, clear) = {
+        let m = model.read(cx);
+        let windows: Vec<_> = m
+            .runtime
+            .iter()
+            .map(|(id, rt)| (*id, rt.windows.clone()))
+            .collect();
+        crate::taskbar::plan(
+            &m.paths,
+            &m.profiles,
+            &windows,
+            &m.tagged,
+            m.settings.taskbar_icons,
+            &exe,
+        )
+    };
+    model.update(cx, |m, _| {
+        m.tagged.0.retain(|h, _| h.is_alive());
+        for r in &tag {
+            m.tagged.0.insert(r.hwnd, r.key.clone());
+        }
+        for h in &clear {
+            m.tagged.0.remove(h);
+        }
+    });
+    if !tag.is_empty() || !clear.is_empty() {
+        cx.global::<Platform>().clone().tag_windows(tag, clear);
     }
 }

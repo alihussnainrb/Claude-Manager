@@ -63,6 +63,7 @@ impl Platform {
                     let _ = hook_tx.try_send(AppEvent::Foreground { pid });
                 }
             });
+            cm_win::taskbar::com_init();
             HOOKS.with(|h| *h.borrow_mut() = Some(hooks));
         });
 
@@ -185,6 +186,30 @@ impl Platform {
                     }
                 });
             });
+        });
+    }
+
+    /// Apply per-profile taskbar identities (COM work, so it runs on the message thread).
+    pub fn tag_windows(
+        &self,
+        tag: Vec<crate::taskbar::TagRequest>,
+        clear: Vec<cm_win::window::WindowHandle>,
+    ) {
+        self.thread.run(move || {
+            for r in &tag {
+                let identity = cm_win::taskbar::Identity {
+                    app_id: &r.app_id,
+                    relaunch_command: &r.relaunch,
+                    display_name: &r.name,
+                    icon: &r.icon,
+                };
+                if let Err(e) = cm_win::taskbar::apply(r.hwnd, &identity) {
+                    tracing::warn!("taskbar tag failed: {e}");
+                }
+            }
+            for h in clear {
+                let _ = cm_win::taskbar::clear(h);
+            }
         });
     }
 

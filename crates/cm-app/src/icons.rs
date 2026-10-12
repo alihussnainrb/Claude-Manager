@@ -69,6 +69,48 @@ pub fn logo_rgba(size: u32, rgb: u32) -> Vec<u8> {
     out
 }
 
+/// A multi-size .ico from straight-alpha RGBA images, stored as 32-bit DIBs.
+pub fn ico_bytes(images: &[(u32, Vec<u8>)]) -> Vec<u8> {
+    let dibs: Vec<Vec<u8>> = images.iter().map(|(s, rgba)| dib(*s, rgba)).collect();
+    let mut out = Vec::new();
+    out.extend_from_slice(&[0, 0, 1, 0]);
+    out.extend_from_slice(&(images.len() as u16).to_le_bytes());
+    let mut offset = 6 + 16 * images.len() as u32;
+    for ((s, _), d) in images.iter().zip(&dibs) {
+        let dim = if *s >= 256 { 0 } else { *s as u8 };
+        out.extend_from_slice(&[dim, dim, 0, 0]);
+        out.extend_from_slice(&1u16.to_le_bytes());
+        out.extend_from_slice(&32u16.to_le_bytes());
+        out.extend_from_slice(&(d.len() as u32).to_le_bytes());
+        out.extend_from_slice(&offset.to_le_bytes());
+        offset += d.len() as u32;
+    }
+    for d in &dibs {
+        out.extend_from_slice(d);
+    }
+    out
+}
+
+/// BITMAPINFOHEADER + bottom-up BGRA rows + an empty AND mask.
+fn dib(size: u32, rgba: &[u8]) -> Vec<u8> {
+    let mut v = Vec::new();
+    v.extend_from_slice(&40u32.to_le_bytes());
+    v.extend_from_slice(&(size as i32).to_le_bytes());
+    v.extend_from_slice(&((size * 2) as i32).to_le_bytes());
+    v.extend_from_slice(&1u16.to_le_bytes());
+    v.extend_from_slice(&32u16.to_le_bytes());
+    v.extend_from_slice(&[0u8; 24]);
+    for y in (0..size).rev() {
+        for x in 0..size {
+            let i = ((y * size + x) * 4) as usize;
+            v.extend_from_slice(&[rgba[i + 2], rgba[i + 1], rgba[i], rgba[i + 3]]);
+        }
+    }
+    let mask_row = (size.div_ceil(32) * 4) as usize;
+    v.extend(std::iter::repeat_n(0u8, mask_row * size as usize));
+    v
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

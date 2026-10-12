@@ -14,6 +14,8 @@ pub struct Settings {
     pub deep_link_broker: bool,
     /// Original `claude://` handler command, restored when the broker is disabled.
     pub saved_protocol_handler: Option<String>,
+    /// Give each profile its own taskbar button and icon.
+    pub taskbar_icons: bool,
     /// Ask which profile a sign-in belongs to when it's unclear; otherwise use the last-used one.
     pub ask_when_unclear: bool,
     /// Show a notice when a newer GitHub release exists.
@@ -29,6 +31,7 @@ impl Default for Settings {
             deep_link_broker: true,
             saved_protocol_handler: None,
             ask_when_unclear: true,
+            taskbar_icons: true,
             check_for_updates: true,
         }
     }

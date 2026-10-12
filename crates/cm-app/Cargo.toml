@@ -26,3 +26,4 @@ async-channel.workspace = true
 gpui-kit = "=0.7.3"
 tray-icon = "0.26"
 global-hotkey = "0.8"
+resvg = "0.46"

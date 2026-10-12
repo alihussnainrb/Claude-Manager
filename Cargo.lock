@@ -900,6 +900,7 @@ dependencies = [
  "cm-win",
  "global-hotkey",
  "gpui-kit",
+ "resvg 0.46.0",
  "serde",
  "serde_json",
  "tracing",

@@ -8,6 +8,7 @@ pub mod msgthread;
 pub mod process;
 pub mod registry;
 pub mod shell;
+pub mod taskbar;
 pub mod window;
 
 use std::path::PathBuf;
