@@ -152,3 +152,9 @@ pub fn dev_view(name: &str, cx: &mut App) {
         }
     }
 }
+
+/// Whether the manager window is currently open (not hidden to the tray).
+pub fn is_main_open(cx: &mut App) -> bool {
+    let h = windows(cx).main;
+    h.is_some_and(|h| h.update(cx, |_, _, _| ()).is_ok())
+}

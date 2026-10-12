@@ -102,10 +102,24 @@ impl Platform {
     }
 
     /// Rebuild the tray menu.
-    pub fn update_tray(&self, profiles: Vec<TrayProfile>, routing_on: bool) {
+    pub fn update_tray(
+        &self,
+        profiles: Vec<TrayProfile>,
+        routing_on: bool,
+        update: Option<String>,
+    ) {
         self.thread.run(move || {
             let menu = Menu::new();
             let _ = menu.append(&MenuItem::with_id("header", "Claude Manager", false, None));
+            if let Some(v) = &update {
+                let _ = menu.append(&MenuItem::with_id(
+                    "update",
+                    format!("Restart to update to {v}"),
+                    true,
+                    None,
+                ));
+                let _ = menu.append(&PredefinedMenuItem::separator());
+            }
             for p in &profiles {
                 let label = format!(
                     "{}    {}",
@@ -226,6 +240,7 @@ fn parse_menu_id(id: &str) -> Option<TrayAction> {
         "switcher" => TrayAction::Switcher,
         "routing" => TrayAction::ToggleRouting,
         "settings" => TrayAction::Settings,
+        "update" => TrayAction::InstallUpdate,
         "quit" => TrayAction::Quit,
         other => TrayAction::Profile(other.strip_prefix("profile:")?.parse().ok()?),
     })

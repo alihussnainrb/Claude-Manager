@@ -234,8 +234,8 @@ impl SettingsView {
                         p,
                     ))
                     .child(set_row(
-                        "Tell me about new versions",
-                        Some(div().child("Shows a notice when a newer release is on GitHub. Nothing installs automatically.").into_any_element()),
+                        "Update automatically",
+                        Some(div().child("Downloads new versions from GitHub and installs them while Claude Manager is in the tray. Claude windows keep running.").into_any_element()),
                         toggle("check-updates", s.check_for_updates, p).on_click(cx.listener(|this, _, _, cx| {
                             this.model.update(cx, |m, cx| {
                                 m.update_settings(|s| s.check_for_updates = !s.check_for_updates);
@@ -445,12 +445,60 @@ impl SettingsView {
         )
     }
 
-    fn about(&self, p: &Palette) -> Div {
+    fn about(&self, p: &Palette, cx: &mut Context<Self>) -> Div {
+        use crate::updater::UpdateState;
+        let state = self.model.read(cx).update.clone();
+        let (status, action): (String, Option<(&'static str, bool)>) = match &state {
+            UpdateState::Idle => (
+                "Updates come from GitHub Releases.".into(),
+                Some(("Check for updates", false)),
+            ),
+            UpdateState::Checking => ("Checking GitHub…".into(), None),
+            UpdateState::UpToDate => (
+                "You have the latest version.".into(),
+                Some(("Check again", false)),
+            ),
+            UpdateState::Downloading(r) => (format!("Downloading {}…", r.version), None),
+            UpdateState::Ready(r, _) => (
+                format!("Version {} is ready.", r.version),
+                Some(("Restart to update", true)),
+            ),
+            UpdateState::Failed(e) => (
+                format!("Last check failed: {e}"),
+                Some(("Try again", false)),
+            ),
+        };
+        let release_page = match &state {
+            UpdateState::Downloading(r) | UpdateState::Ready(r, _) => r.page_url.clone(),
+            _ => format!("https://github.com/{}/releases", crate::updater::REPO),
+        };
         page("About", "Run several Claude Desktop accounts side by side.", p).child(
             card(p)
                 .gap(px(8.))
                 .text_size(px(12.5))
-                .child(div().font_weight(FontWeight::SEMIBOLD).child(format!("Claude Manager {}", env!("CARGO_PKG_VERSION"))))
+                .child(set_row(
+                    format!("Claude Manager {}", env!("CARGO_PKG_VERSION")),
+                    Some(div().child(status).into_any_element()),
+                    h_flex()
+                        .gap(px(8.))
+                        .child(button("release-notes", "Release notes", None, Btn::Ghost, true, p).on_click(
+                            move |_, _, cx| cx.open_url(&release_page),
+                        ))
+                        .when_some(action, |this, (label, install)| {
+                            this.child(
+                                button("update-action", label, Some(IconName::RefreshCw), if install { Btn::Primary } else { Btn::Secondary }, true, p)
+                                    .on_click(move |_, _, cx| {
+                                        if install {
+                                            crate::app::install_update(cx)
+                                        } else {
+                                            crate::app::check_for_updates_now(cx)
+                                        }
+                                    }),
+                            )
+                        }),
+                    true,
+                    p,
+                ))
                 .child(div().text_color(c(p.muted)).child("Free and open source under the MIT license. Font: Figtree (SIL Open Font License)."))
                 .child(div().text_color(c(p.muted)).child("Claude Manager is an independent project, not affiliated with Anthropic. Each profile runs the official Claude Desktop app.")),
         )
@@ -533,7 +581,7 @@ impl Render for SettingsView {
             Section::Shortcuts => self.shortcuts(p, cx),
             Section::Routing => self.routing(p, cx),
             Section::Backup => self.backup(p, cx),
-            Section::About => self.about(p),
+            Section::About => self.about(p, cx),
         };
         div()
             .flex()

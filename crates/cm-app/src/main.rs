@@ -11,6 +11,7 @@ mod scan;
 mod taskbar;
 mod theme;
 mod ui;
+mod updater;
 
 use cm_win::ipc::{self, Instance};
 use gpui_kit::*;
@@ -21,6 +22,7 @@ use crate::platform::Platform;
 
 struct Args {
     background: bool,
+    after_update: Option<u32>,
     command: Option<Command>,
     dev_view: Option<String>,
 }
@@ -28,6 +30,7 @@ struct Args {
 fn parse_args() -> Args {
     let mut args = Args {
         background: false,
+        after_update: None,
         command: None,
         dev_view: None,
     };
@@ -35,6 +38,7 @@ fn parse_args() -> Args {
     while let Some(a) = it.next() {
         match a.as_str() {
             "--background" => args.background = true,
+            "--after-update" => args.after_update = it.next().and_then(|p| p.parse().ok()),
             "--dev-view" => args.dev_view = it.next(),
             "--launch" => args.command = it.next().map(|id| Command::Launch { id }),
             "--deeplink" => args.command = it.next().map(|url| Command::DeepLink { url }),
@@ -75,6 +79,12 @@ fn main() {
         return;
     };
     let _log_guard = init_logging(&paths);
+
+    // Started by our own updater: let the old version exit first so we can take the lock.
+    if let Some(pid) = args.after_update {
+        updater::wait_for_exit(pid);
+    }
+    std::thread::spawn(updater::cleanup);
 
     // A second copy forwards its request to the running one and exits.
     let guard = match ipc::acquire() {
@@ -125,6 +135,12 @@ fn main() {
             cx.set_global(Platform::start(tx.clone()));
             model.update(cx, |m, _| {
                 broker::ensure(m);
+                if args.after_update.is_some() {
+                    m.notify_info(format!(
+                        "Updated to Claude Manager {}",
+                        env!("CARGO_PKG_VERSION")
+                    ));
+                }
             });
 
             if !args.background {
@@ -142,5 +158,6 @@ fn main() {
             })
             .detach();
             app::sync_platform(cx);
+            app::start_update_loop(cx);
         });
 }

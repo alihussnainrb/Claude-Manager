@@ -62,6 +62,7 @@ pub fn handle(ev: AppEvent, cx: &mut App) {
             TrayAction::Profile(id) => show(id, cx),
             TrayAction::Switcher => ui::open_switcher(cx),
             TrayAction::Settings => ui::open_settings(cx),
+            TrayAction::InstallUpdate => install_update(cx),
             TrayAction::ToggleRouting => model.update(cx, |m, cx| {
                 m.update_settings(|s| s.deep_link_broker = !s.deep_link_broker);
                 if m.settings.deep_link_broker {
@@ -200,8 +201,9 @@ pub fn sync_platform(cx: &mut App) {
         hotkeys.push((k.clone(), HotkeyTarget::Switcher));
     }
     let routing = m.settings.deep_link_broker;
+    let update = m.update.ready().map(|r| r.version.clone());
     let sig = format!(
-        "{:?}|{:?}|{routing}",
+        "{:?}|{:?}|{routing}|{update:?}",
         tray.iter()
             .map(|t| (t.id, &t.name, t.running))
             .collect::<Vec<_>>(),
@@ -212,7 +214,7 @@ pub fn sync_platform(cx: &mut App) {
     }
     startup(cx).platform_sig = sig;
     let platform = cx.global::<Platform>().clone();
-    platform.update_tray(tray, routing);
+    platform.update_tray(tray, routing, update);
     platform.set_hotkeys(hotkeys);
 }
 
@@ -263,5 +265,126 @@ pub fn sync_taskbar(cx: &mut App) {
     });
     if !plan.tag.is_empty() || !plan.clear.is_empty() || !plan.titles.is_empty() {
         cx.global::<Platform>().clone().tag_windows(plan);
+    }
+}
+
+const UPDATE_FIRST_CHECK: Duration = Duration::from_secs(20);
+const UPDATE_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+
+/// Check GitHub shortly after startup and then every few hours, when enabled.
+pub fn start_update_loop(cx: &mut App) {
+    cx.spawn(async move |cx| {
+        cx.background_executor().timer(UPDATE_FIRST_CHECK).await;
+        loop {
+            let enabled = cx.update(|cx| model(cx).read(cx).settings.check_for_updates);
+            if enabled {
+                run_update_check(cx, false).await;
+            }
+            cx.background_executor().timer(UPDATE_INTERVAL).await;
+        }
+    })
+    .detach();
+}
+
+/// "Check now" from Settings.
+pub fn check_for_updates_now(cx: &mut App) {
+    cx.spawn(async move |cx| run_update_check(cx, true).await)
+        .detach();
+}
+
+async fn run_update_check(cx: &mut AsyncApp, manual: bool) {
+    use crate::updater::{self, UpdateState};
+    let busy = cx.update(|cx| {
+        matches!(
+            model(cx).read(cx).update,
+            UpdateState::Checking | UpdateState::Downloading(_) | UpdateState::Ready(..)
+        )
+    });
+    if busy {
+        return;
+    }
+    set_update_state(cx, UpdateState::Checking);
+    let found = cx.background_spawn(async { updater::check() }).await;
+    let release = match found {
+        Ok(Some(r)) => r,
+        Ok(None) => {
+            set_update_state(cx, UpdateState::UpToDate);
+            return;
+        }
+        Err(e) => {
+            tracing::warn!("update check failed: {e}");
+            if manual {
+                cx.update(|cx| {
+                    model(cx).update(cx, |m, _| {
+                        m.notify_error(format!("Update check failed: {e}"))
+                    })
+                });
+            }
+            set_update_state(cx, UpdateState::Failed(e));
+            return;
+        }
+    };
+    tracing::info!("update available: {}", release.version);
+    set_update_state(cx, UpdateState::Downloading(release.clone()));
+    let r = release.clone();
+    match cx
+        .background_spawn(async move { updater::download(&r) })
+        .await
+    {
+        Ok(path) => {
+            set_update_state(cx, UpdateState::Ready(release.clone(), path));
+            // Nobody is looking at the manager: install now. Claude windows keep running.
+            let window_open = cx.update(ui::is_main_open);
+            if window_open {
+                cx.update(|cx| {
+                    model(cx).update(cx, |m, cx| {
+                        m.notify_info(format!(
+                            "Claude Manager {} is ready. Restart to update.",
+                            release.version
+                        ));
+                        cx.notify();
+                    })
+                });
+            } else {
+                cx.update(install_update);
+            }
+        }
+        Err(e) => {
+            tracing::warn!("update download failed: {e}");
+            set_update_state(cx, UpdateState::Failed(e));
+        }
+    }
+}
+
+fn set_update_state(cx: &mut AsyncApp, state: crate::updater::UpdateState) {
+    cx.update(|cx| {
+        model(cx).update(cx, |m, cx| {
+            m.update = state;
+            cx.notify();
+        });
+        sync_platform(cx);
+    });
+}
+
+/// Swap in the downloaded version and restart into it.
+pub fn install_update(cx: &mut App) {
+    let crate::updater::UpdateState::Ready(release, path) = model(cx).read(cx).update.clone()
+    else {
+        return;
+    };
+    let background = !ui::is_main_open(cx);
+    match crate::updater::install_and_restart(&path, background) {
+        Ok(()) => {
+            tracing::info!("restarting into {}", release.version);
+            if cx.has_global::<Platform>() {
+                cx.global::<Platform>().shutdown();
+            }
+            cx.quit();
+        }
+        Err(e) => model(cx).update(cx, |m, cx| {
+            m.notify_error(format!("Update failed: {e}"));
+            m.update = crate::updater::UpdateState::Failed(e);
+            cx.notify();
+        }),
     }
 }

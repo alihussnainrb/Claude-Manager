@@ -43,6 +43,7 @@ pub enum TrayAction {
     Switcher,
     ToggleRouting,
     Settings,
+    InstallUpdate,
     Quit,
 }
 

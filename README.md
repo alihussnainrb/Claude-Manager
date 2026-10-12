@@ -17,6 +17,16 @@ Free and open source (MIT). Not affiliated with Anthropic.
 - Windows 10 (19041+) or 11.
 - Claude Desktop from the Microsoft Store or claude.com.
 
+## Download
+
+Get `claude-manager.exe` from the [latest release](https://github.com/alihussnainrb/Claude-Manager/releases/latest) and run it. It's a single portable exe; put it anywhere (for example `%LOCALAPPDATA%ProgramsClaude Manager`) and turn on "Open when Windows starts" in Settings.
+
+The exe isn't code-signed yet, so Windows SmartScreen may warn the first time: choose "More info", then "Run anyway".
+
+## Updates
+
+Claude Manager checks GitHub Releases at startup and every 6 hours. A new version is downloaded and checked against its published SHA-256. If the manager is in the tray, it installs and restarts on its own; if its window is open, a "Restart to update" button appears in the status bar. Claude windows keep running through an update. Turn this off in Settings → General.
+
 ## Good to know
 
 - Cowork workspaces need the profile's folder directly inside `%APPDATA%` (the default), and only one profile at a time can run Cowork. This is a Windows limit.
@@ -36,6 +46,12 @@ The binary is `target/release/claude-manager.exe`.
 ```bash
 cargo test --workspace
 ```
+
+### Releasing
+
+Actions → **Release** → "Run workflow", and enter the new version (e.g. `0.2.0`). The workflow bumps `Cargo.toml`, commits, tags `v0.2.0`, builds, and publishes a GitHub Release with `claude-manager.exe` and its `.sha256`. Installed copies pick it up through the updater.
+
+Or bump `version` in the root `Cargo.toml` yourself, commit, and push a tag: `git tag v0.2.0 && git push origin v0.2.0`.
 
 ### Layout
 

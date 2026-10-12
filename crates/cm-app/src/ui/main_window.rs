@@ -849,6 +849,15 @@ impl MainView {
 
     fn render_status_bar(&self, p: &Palette, cx: &Context<Self>) -> impl IntoElement + use<> {
         let m = self.model.read(cx);
+        let update_note: Option<(SharedString, bool)> = match &m.update {
+            crate::updater::UpdateState::Downloading(r) => {
+                Some((format!("Downloading {}…", r.version).into(), false))
+            }
+            crate::updater::UpdateState::Ready(r, _) => {
+                Some((format!("Restart to update to {}", r.version).into(), true))
+            }
+            _ => None,
+        };
         let (ok, install): (bool, SharedString) = match &m.install {
             Some(i) => (
                 true,
@@ -896,6 +905,27 @@ impl MainView {
             })
             .child(sep())
             .child(format!("{} running", m.running_count()))
+            .child(div().flex_1())
+            .when_some(update_note, |this, (text, ready)| {
+                this.child(
+                    h_flex()
+                        .id("update-note")
+                        .gap(px(6.))
+                        .items_center()
+                        .px(px(8.))
+                        .py(px(2.))
+                        .rounded(px(6.))
+                        .text_color(c(p.accent_ink))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .when(ready, |this| {
+                            this.cursor_pointer()
+                                .bg(c(p.accent_soft))
+                                .on_click(|_, _, cx| crate::app::install_update(cx))
+                        })
+                        .child(icon(IconName::RefreshCw, 12., c(p.accent_ink)))
+                        .child(text),
+                )
+            })
     }
 
     // ---- new profile dialog -----------------------------------------------------------------
