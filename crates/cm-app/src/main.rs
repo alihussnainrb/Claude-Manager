@@ -179,12 +179,11 @@ fn uninstall(paths: &cm_core::paths::Paths) {
         .ok()
         .flatten()
         .is_some_and(|h| h.contains("--deeplink"));
-    if ours {
-        if let Some(cmd) = settings.saved_protocol_handler.or(fallback) {
-            if let Err(e) = cm_win::registry::set_protocol_handler(&cmd) {
-                tracing::error!("couldn't restore the claude:// handler: {e}");
-            }
-        }
+    if ours
+        && let Some(cmd) = settings.saved_protocol_handler.or(fallback)
+        && let Err(e) = cm_win::registry::set_protocol_handler(&cmd)
+    {
+        tracing::error!("couldn't restore the claude:// handler: {e}");
     }
     if let Err(e) = cm_win::registry::set_run_entry(None) {
         tracing::error!("couldn't remove the startup entry: {e}");
