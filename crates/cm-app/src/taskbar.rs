@@ -1,8 +1,8 @@
 //! Per-profile taskbar buttons: render each profile's icon to an .ico and tag its Claude
-//! windows with their own AppUserModelID, icon and relaunch command.
+//! windows with their own AppUserModelID, icon and title.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use cm_core::paths::Paths;
 use cm_core::{Profile, ProfileId};
@@ -16,8 +16,15 @@ const ICO_SIZES: [u32; 8] = [16, 20, 24, 32, 40, 48, 64, 96];
 /// Bump when the icon artwork changes so cached files are regenerated.
 const ICON_VERSION: u32 = 2;
 
-pub fn app_id(id: ProfileId) -> String {
-    format!("ClaudeManager.Profile.{id}")
+/// Includes the look, so a recolored profile gets a fresh taskbar entry (Windows caches the
+/// button icon per ID).
+pub fn app_id(p: &Profile) -> String {
+    format!(
+        "ClaudeManager.Profile.{}.{}{}",
+        p.id,
+        p.color.label(),
+        p.icon.label()
+    )
 }
 
 /// What a tagged window should currently look like; re-tag when this changes.
@@ -98,8 +105,6 @@ pub struct Tagged(pub HashMap<WindowHandle, String>);
 pub struct TagRequest {
     pub hwnd: WindowHandle,
     pub app_id: String,
-    pub relaunch: String,
-    pub name: String,
     pub icon: PathBuf,
     pub key: String,
 }
@@ -111,18 +116,30 @@ pub fn plan(
     windows: &[(ProfileId, Vec<WindowHandle>)],
     tagged: &Tagged,
     enabled: bool,
-    exe: &Path,
-) -> (Vec<TagRequest>, Vec<WindowHandle>) {
+) -> Plan {
     if !enabled {
-        return (Vec::new(), tagged.0.keys().copied().collect());
+        let clear: Vec<_> = tagged.0.keys().copied().collect();
+        // Hand the plain title back too.
+        let titles = clear.iter().map(|h| (*h, "Claude".to_string())).collect();
+        return Plan {
+            tag: Vec::new(),
+            clear,
+            titles,
+        };
     }
     let mut tag = Vec::new();
+    let mut titles = Vec::new();
     for (id, hwnds) in windows {
         let Some(p) = profiles.iter().find(|p| p.id == *id) else {
             continue;
         };
         let key = tag_key(p);
+        let wanted = window_title(p);
         for &hwnd in hwnds {
+            // Claude resets its title when it navigates, so check every scan.
+            if cm_win::window::title(hwnd) != wanted {
+                titles.push((hwnd, wanted.clone()));
+            }
             if tagged.0.get(&hwnd) == Some(&key) {
                 continue;
             }
@@ -131,15 +148,28 @@ pub fn plan(
             };
             tag.push(TagRequest {
                 hwnd,
-                app_id: app_id(p.id),
-                relaunch: format!("\"{}\" --launch {}", exe.display(), p.id),
-                name: format!("Claude · {}", p.name),
+                app_id: app_id(p),
                 icon,
                 key: key.clone(),
             });
         }
     }
-    (tag, Vec::new())
+    Plan {
+        tag,
+        clear: Vec::new(),
+        titles,
+    }
+}
+
+pub struct Plan {
+    pub tag: Vec<TagRequest>,
+    pub clear: Vec<WindowHandle>,
+    pub titles: Vec<(WindowHandle, String)>,
+}
+
+/// "Work · Claude": the profile name first, so Alt-Tab and taskbar previews tell windows apart.
+pub fn window_title(p: &Profile) -> String {
+    format!("{} · Claude", p.name)
 }
 
 #[cfg(test)]

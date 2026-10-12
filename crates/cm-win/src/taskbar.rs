@@ -25,8 +25,6 @@ use crate::{wide, wide_path};
 
 pub struct Identity<'a> {
     pub app_id: &'a str,
-    pub relaunch_command: &'a str,
-    pub display_name: &'a str,
     pub icon: &'a Path,
 }
 
@@ -54,19 +52,13 @@ fn lpwstr(s: &str) -> PROPVARIANT {
 pub fn apply(h: WindowHandle, id: &Identity) -> Result<()> {
     unsafe {
         let store: IPropertyStore = SHGetPropertyStoreForWindow(h.hwnd())?;
-        // Relaunch properties first; the ID makes them take effect.
-        store.SetValue(
-            &PKEY_AppUserModel_RelaunchCommand,
-            &lpwstr(id.relaunch_command),
-        )?;
-        store.SetValue(
-            &PKEY_AppUserModel_RelaunchDisplayNameResource,
-            &lpwstr(id.display_name),
-        )?;
-        store.SetValue(
-            &PKEY_AppUserModel_RelaunchIconResource,
-            &lpwstr(&format!("{},0", id.icon.display())),
-        )?;
+        // Only the ID. Relaunch properties (for pinning) make the taskbar ignore the window
+        // icon on Store-installed Claude and show a blank button, and that result is cached
+        // per ID. Clear any left from older builds.
+        let empty = PROPVARIANT::default();
+        store.SetValue(&PKEY_AppUserModel_RelaunchCommand, &empty)?;
+        store.SetValue(&PKEY_AppUserModel_RelaunchDisplayNameResource, &empty)?;
+        store.SetValue(&PKEY_AppUserModel_RelaunchIconResource, &empty)?;
         store.SetValue(&PKEY_AppUserModel_ID, &lpwstr(id.app_id))?;
         store.Commit()?;
     }

@@ -116,3 +116,30 @@ pub fn request_close(h: WindowHandle) {
         let _ = PostMessageW(Some(h.hwnd()), WM_CLOSE, WPARAM(0), LPARAM(0));
     }
 }
+
+/// A window's title. Reads the cached caption, so it never blocks on a hung window.
+pub fn title(h: WindowHandle) -> String {
+    use windows::Win32::UI::WindowsAndMessaging::GetWindowTextW;
+    let mut buf = [0u16; 512];
+    let n = unsafe { GetWindowTextW(h.hwnd(), &mut buf) } as usize;
+    String::from_utf16_lossy(&buf[..n])
+}
+
+/// Set another process's window title, giving up after 200 ms if that window is hung.
+pub fn set_title(h: WindowHandle, text: &str) {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTEXT,
+    };
+    let w = crate::wide(text);
+    unsafe {
+        let _ = SendMessageTimeoutW(
+            h.hwnd(),
+            WM_SETTEXT,
+            WPARAM(0),
+            LPARAM(w.as_ptr() as isize),
+            SMTO_ABORTIFHUNG,
+            200,
+            None,
+        );
+    }
+}

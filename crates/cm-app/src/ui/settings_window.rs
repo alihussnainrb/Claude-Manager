@@ -222,7 +222,7 @@ impl SettingsView {
                     ))
                     .child(set_row(
                         "Give each profile its own taskbar button",
-                        Some(div().child("Shows the profile's colored icon instead of Claude's, and pins relaunch that profile.").into_any_element()),
+                        Some(div().child("Shows the profile's icon and name (like \"Work · Claude\") instead of Claude's.").into_any_element()),
                         toggle("taskbar-icons", s.taskbar_icons, p).on_click(cx.listener(|this, _, _, cx| {
                             this.model.update(cx, |m, cx| {
                                 m.update_settings(|s| s.taskbar_icons = !s.taskbar_icons);

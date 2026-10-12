@@ -236,11 +236,8 @@ pub fn sync_taskbar(cx: &mut App) {
     if !cx.has_global::<Platform>() {
         return;
     }
-    let Ok(exe) = std::env::current_exe() else {
-        return;
-    };
     let model = model(cx);
-    let (tag, clear) = {
+    let plan = {
         let m = model.read(cx);
         let windows: Vec<_> = m
             .runtime
@@ -253,19 +250,18 @@ pub fn sync_taskbar(cx: &mut App) {
             &windows,
             &m.tagged,
             m.settings.taskbar_icons,
-            &exe,
         )
     };
     model.update(cx, |m, _| {
         m.tagged.0.retain(|h, _| h.is_alive());
-        for r in &tag {
+        for r in &plan.tag {
             m.tagged.0.insert(r.hwnd, r.key.clone());
         }
-        for h in &clear {
+        for h in &plan.clear {
             m.tagged.0.remove(h);
         }
     });
-    if !tag.is_empty() || !clear.is_empty() {
-        cx.global::<Platform>().clone().tag_windows(tag, clear);
+    if !plan.tag.is_empty() || !plan.clear.is_empty() || !plan.titles.is_empty() {
+        cx.global::<Platform>().clone().tag_windows(plan);
     }
 }

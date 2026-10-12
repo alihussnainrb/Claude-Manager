@@ -190,17 +190,12 @@ impl Platform {
     }
 
     /// Apply per-profile taskbar identities (COM work, so it runs on the message thread).
-    pub fn tag_windows(
-        &self,
-        tag: Vec<crate::taskbar::TagRequest>,
-        clear: Vec<cm_win::window::WindowHandle>,
-    ) {
+    pub fn tag_windows(&self, plan: crate::taskbar::Plan) {
         self.thread.run(move || {
+            let crate::taskbar::Plan { tag, clear, titles } = plan;
             for r in &tag {
                 let identity = cm_win::taskbar::Identity {
                     app_id: &r.app_id,
-                    relaunch_command: &r.relaunch,
-                    display_name: &r.name,
                     icon: &r.icon,
                 };
                 if let Err(e) = cm_win::taskbar::apply(r.hwnd, &identity) {
@@ -209,6 +204,9 @@ impl Platform {
             }
             for h in clear {
                 let _ = cm_win::taskbar::clear(h);
+            }
+            for (h, title) in titles {
+                cm_win::window::set_title(h, &title);
             }
         });
     }
