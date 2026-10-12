@@ -1,4 +1,4 @@
-//! A8: Settings — General, Shortcuts, Sign-in routing, Backup, About.
+//! A8: Settings — a dialog over the main window: General, Shortcuts, Sign-in routing, Backup, About.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{h_flex, v_flex};
@@ -9,18 +9,11 @@ use super::widgets::*;
 use crate::model::{AppModel, model};
 use crate::theme::{self, Palette, c, mix};
 
-pub fn open(cx: &mut App) -> Option<AnyWindowHandle> {
-    let options = super::chrome_options(980., 620., Some((720., 480.)), cx);
-    match gpui_kit::open_window(options, cx, |window, cx| {
-        cx.new(|cx| SettingsView::new(window, cx))
-    }) {
-        Ok((h, _)) => Some(h),
-        Err(e) => {
-            tracing::error!("settings failed to open: {e}");
-            None
-        }
-    }
+pub enum SettingsEvent {
+    Close,
 }
+
+impl EventEmitter<SettingsEvent> for SettingsView {}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Section {
@@ -31,7 +24,7 @@ enum Section {
     About,
 }
 
-struct SettingsView {
+pub struct SettingsView {
     model: Entity<AppModel>,
     section: Section,
     recording: bool,
@@ -40,12 +33,9 @@ struct SettingsView {
 }
 
 impl SettingsView {
-    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(cx: &mut Context<Self>) -> Self {
         let model = model(cx);
-        let subs = vec![
-            cx.observe(&model, |_, _, cx| cx.notify()),
-            cx.observe_window_appearance(window, |_, window, cx| theme::sync(window, cx)),
-        ];
+        let subs = vec![cx.observe(&model, |_, _, cx| cx.notify())];
         Self {
             model,
             section: Section::Routing,
@@ -55,8 +45,16 @@ impl SettingsView {
         }
     }
 
+    pub fn focus_handle(&self) -> FocusHandle {
+        self.focus.clone()
+    }
+
     fn on_key(&mut self, ev: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
         if !self.recording {
+            if ev.keystroke.key == "escape" {
+                cx.stop_propagation();
+                cx.emit(SettingsEvent::Close);
+            }
             return;
         }
         cx.stop_propagation();
@@ -152,7 +150,6 @@ impl SettingsView {
                     .px(px(8.))
                     .pb(px(14.))
                     .h(px(36.))
-                    .window_control_area(WindowControlArea::Drag)
                     .child(logo(20., c(p.accent)))
                     .child(
                         div()
@@ -574,7 +571,7 @@ fn page(title: &'static str, lede: &'static str, p: &Palette) -> Div {
 }
 
 impl Render for SettingsView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = theme::palette(cx);
         let body = match self.section {
             Section::General => self.general(p, cx),
@@ -583,17 +580,27 @@ impl Render for SettingsView {
             Section::Backup => self.backup(p, cx),
             Section::About => self.about(p, cx),
         };
+        let close_hover = mix(p.fg, p.bg, 0.07);
         div()
             .flex()
             .flex_row()
             .id("settings-root")
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key))
-            .size_full()
+            .w(px(860.))
+            .max_w(relative(0.94))
+            .h(px(600.))
+            .max_h(relative(0.92))
+            .rounded(px(16.))
+            .overflow_hidden()
+            .border_1()
+            .border_color(c(p.line))
+            .shadow_2xl()
             .bg(c(p.side))
             .font_family(theme::FONT_UI)
             .text_size(px(13.))
             .text_color(c(p.fg))
+            .occlude()
             .child(self.nav(p, cx))
             .child(
                 v_flex()
@@ -601,33 +608,35 @@ impl Render for SettingsView {
                     .relative()
                     .flex_1()
                     .min_w_0()
-                    .m(px(6.))
-                    .ml_0()
-                    .rounded(px(10.))
                     .bg(c(p.bg))
-                    .border_1()
+                    .border_l_1()
                     .border_color(c(p.side_line))
-                    .overflow_hidden()
-                    .child(
-                        div()
-                            .absolute()
-                            .top_0()
-                            .left_0()
-                            .right(px(140.))
-                            .h(px(34.))
-                            .window_control_area(WindowControlArea::Drag),
-                    )
                     .child(
                         div()
                             .id("settings-scroll")
                             .flex_1()
                             .overflow_y_scroll()
                             .px(px(30.))
-                            .pt(px(44.))
+                            .pt(px(28.))
                             .pb(px(20.))
                             .child(body),
                     )
-                    .child(caption_buttons(p, window)),
+                    .child(
+                        div()
+                            .id("settings-close")
+                            .absolute()
+                            .top(px(14.))
+                            .right(px(14.))
+                            .size(px(30.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(8.))
+                            .cursor_pointer()
+                            .hover(move |s| s.bg(close_hover))
+                            .on_click(cx.listener(|_, _, _, cx| cx.emit(SettingsEvent::Close)))
+                            .child(icon(IconName::X, 15., c(p.muted))),
+                    ),
             )
     }
 }

@@ -18,7 +18,6 @@ pub struct OpenWindows {
     main: Option<AnyWindowHandle>,
     switcher: Option<AnyWindowHandle>,
     router: Option<AnyWindowHandle>,
-    settings: Option<AnyWindowHandle>,
     main_view: Option<WeakEntity<MainView>>,
 }
 impl Global for OpenWindows {}
@@ -106,12 +105,18 @@ pub fn open_router(url: String, candidates: Vec<ProfileId>, cx: &mut App) {
     windows(cx).router = router::open(url, candidates, cx);
 }
 
+/// Settings is a dialog over the main window.
 pub fn open_settings(cx: &mut App) {
-    let existing = windows(cx).settings;
-    if activate(existing, cx) {
+    open_main(cx);
+    let (Some(handle), Some(view)) = (
+        windows(cx).main,
+        windows(cx).main_view.clone().and_then(|v| v.upgrade()),
+    ) else {
         return;
-    }
-    windows(cx).settings = settings_window::open(cx);
+    };
+    let _ = handle.update(cx, |_, window, cx| {
+        view.update(cx, |v, cx| v.open_settings(window, cx))
+    });
 }
 
 /// Debug builds only: open the app in a given state so each screen can be checked visually.

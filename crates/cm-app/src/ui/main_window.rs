@@ -51,6 +51,8 @@ pub struct MainView {
     pub(super) mcp_issues: Vec<cm_core::mcp::McpIssue>,
     pub(super) mcp_dirty: bool,
     pub(super) seed_results: HashMap<ProfileId, SharedString>,
+    settings: Option<Entity<super::settings_window::SettingsView>>,
+    _settings_sub: Option<Subscription>,
     toast_for: Option<i64>,
     _toast_timer: Option<Task<()>>,
     _subs: Vec<Subscription>,
@@ -111,10 +113,33 @@ impl MainView {
             mcp_issues: Vec::new(),
             mcp_dirty: false,
             seed_results: HashMap::new(),
+            settings: None,
+            _settings_sub: None,
             toast_for: None,
             _toast_timer: None,
             _subs: subs,
         }
+    }
+
+    /// Show Settings as a dialog over this window.
+    pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings.is_some() {
+            return;
+        }
+        self.dialog = None;
+        self.menu_open = false;
+        let view = cx.new(super::settings_window::SettingsView::new);
+        self._settings_sub = Some(cx.subscribe(
+            &view,
+            |this, _, _: &super::settings_window::SettingsEvent, cx| {
+                this.settings = None;
+                this._settings_sub = None;
+                cx.notify();
+            },
+        ));
+        view.read(cx).focus_handle().focus(window, cx);
+        self.settings = Some(view);
+        cx.notify();
     }
 
     pub(super) fn select(&mut self, id: ProfileId, cx: &mut Context<Self>) {
@@ -488,7 +513,7 @@ impl MainView {
                     .text_color(c(p.side_muted))
                     .cursor_pointer()
                     .hover(|s| s.bg(mix(p.side_fg, p.side, 0.06)))
-                    .on_click(|_, _, cx| super::open_settings(cx))
+                    .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx)))
                     .child(icon(IconName::Settings, 16., c(p.side_muted)))
                     .child("Settings"),
             )
@@ -1157,11 +1182,11 @@ impl Render for MainView {
             .relative()
             .flex_1()
             .min_w_0()
-            .m(px(6.))
-            .ml_0()
-            .rounded(px(10.))
+            // Flush with the window edges, rounded only where it meets the sidebar.
+            .rounded_tl(px(12.))
+            .rounded_bl(px(12.))
             .bg(c(p.bg))
-            .border_1()
+            .border_l_1()
             .border_color(c(p.side_line))
             .overflow_hidden()
             .text_color(c(p.fg))
@@ -1212,6 +1237,24 @@ impl Render for MainView {
             .child(sidebar)
             .child(panel)
             .children(dialog)
+            .when_some(self.settings.clone(), |this, settings| {
+                this.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .bg(gpui_kit::hsla(
+                            0.07,
+                            0.3,
+                            0.12,
+                            if p.dark { 0.55 } else { 0.34 },
+                        ))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .occlude()
+                        .child(settings),
+                )
+            })
     }
 }
 
