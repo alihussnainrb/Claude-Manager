@@ -892,7 +892,7 @@ dependencies = [
 
 [[package]]
 name = "cm-app"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -914,7 +914,7 @@ dependencies = [
 
 [[package]]
 name = "cm-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -925,7 +925,7 @@ dependencies = [
 
 [[package]]
 name = "cm-win"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "cm-core",
  "tracing",
