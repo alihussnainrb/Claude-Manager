@@ -1,0 +1,15 @@
+[package]
+name = "cm-core"
+description = "Platform-independent model and logic for Claude Manager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

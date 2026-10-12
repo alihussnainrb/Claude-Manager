@@ -1,0 +1,28 @@
+[package]
+name = "cm-app"
+description = "Claude Manager — run multiple Claude Desktop accounts side by side"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "claude-manager"
+path = "src/main.rs"
+
+[build-dependencies]
+winresource = "0.1"
+
+[dependencies]
+cm-core.workspace = true
+cm-win.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+async-channel.workspace = true
+# GPUI is pre-1.0; pin exactly and upgrade deliberately.
+gpui-kit = "=0.7.3"
+tray-icon = "0.26"
+global-hotkey = "0.8"
