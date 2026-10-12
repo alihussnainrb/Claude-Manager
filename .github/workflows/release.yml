@@ -51,9 +51,14 @@ jobs:
           cargo update --workspace
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "Release v$v"
+          if git diff --quiet; then
+            echo "Cargo.toml is already at $v"
+          else
+            git commit -am "Release v$v"
+            git push origin "HEAD:${{ github.ref_name }}"
+          fi
           git tag "v$v"
-          git push origin "HEAD:${{ github.ref_name }}" "v$v"
+          git push origin "v$v"
           echo "TAG=v$v" >> "$GITHUB_ENV"
 
       - name: Use pushed tag
