@@ -101,6 +101,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-ChildItem dist
 
+      # Unsigned Store package; Partner Center signs it on submission. Identity values come from
+      # Partner Center → Product identity. Uploaded as a workflow artifact, not a release asset,
+      # because an unsigned .msix can't be installed directly.
+      - name: Build Store package
+        shell: pwsh
+        run: |
+          .\packaging\msix\build.ps1 -Exe target\release\claude-manager.exe -Version $env:TAG -Pack `
+            -IdentityName "Yarrel.ClaudeManager" `
+            -Publisher "CN=15C8B9FC-3B66-4BCE-8F4E-9089B62DD74C" `
+            -PublisherDisplayName "Yarrel" -OutDir store -LayoutDir target/msix-store
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: store-package
+          path: store/*.msix
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:

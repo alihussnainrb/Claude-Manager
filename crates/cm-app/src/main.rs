@@ -140,7 +140,9 @@ fn main() {
 
             let model = cx.new(|_| AppModel::load(paths, tx.clone()));
             cx.set_global(ModelHandle(model.clone()));
-            app::startup(cx).background = args.background;
+            let background =
+                args.background || (app::packaged() && cm_win::package::launched_at_startup());
+            app::startup(cx).background = background;
             cx.set_global(Platform::start(tx.clone()));
             model.update(cx, |m, _| {
                 broker::ensure(m);
@@ -152,7 +154,7 @@ fn main() {
                 }
             });
 
-            if !args.background {
+            if !background {
                 ui::open_main(cx);
             }
             #[cfg(debug_assertions)]

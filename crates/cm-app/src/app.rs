@@ -22,6 +22,12 @@ pub struct Startup {
 }
 impl Global for Startup {}
 
+/// Running as the Microsoft Store (MSIX) build. Package identity can't change, so it's cached.
+pub fn packaged() -> bool {
+    static PACKAGED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *PACKAGED.get_or_init(cm_win::package::is_packaged)
+}
+
 pub fn handle(ev: AppEvent, cx: &mut App) {
     let model = model(cx);
     match ev {
@@ -218,8 +224,19 @@ pub fn sync_platform(cx: &mut App) {
     platform.set_hotkeys(hotkeys);
 }
 
-/// Add or remove the HKCU Run entry to match the setting.
+/// Add or remove the HKCU Run entry (the packaged build's startup task) to match the setting.
 pub fn apply_start_with_windows(m: &mut AppModel) {
+    if packaged() {
+        match cm_win::package::set_startup(m.settings.start_with_windows) {
+            Ok(enabled) if enabled != m.settings.start_with_windows => {
+                m.update_settings(|s| s.start_with_windows = enabled);
+                m.notify_error("Windows blocked starting with Windows. Turn Claude Manager on under Settings › Apps › Startup.");
+            }
+            Ok(_) => {}
+            Err(e) => m.notify_error(format!("Couldn't change the startup setting: {e}")),
+        }
+        return;
+    }
     let command = std::env::current_exe()
         .ok()
         .map(|exe| format!("\"{}\" --background", exe.display()));
@@ -271,8 +288,12 @@ pub fn sync_taskbar(cx: &mut App) {
 const UPDATE_FIRST_CHECK: Duration = Duration::from_secs(20);
 const UPDATE_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
-/// Check GitHub shortly after startup and then every few hours, when enabled.
+/// Check GitHub shortly after startup and then every few hours, when enabled. The Store build
+/// is updated by the Store instead.
 pub fn start_update_loop(cx: &mut App) {
+    if packaged() {
+        return;
+    }
     cx.spawn(async move |cx| {
         cx.background_executor().timer(UPDATE_FIRST_CHECK).await;
         loop {

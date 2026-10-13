@@ -182,7 +182,6 @@ pub fn wait_for_change(subkey: &str) -> io::Result<()> {
     Ok(())
 }
 
-
 // ---- Registered URL handler -----------------------------------------------------------------
 //
 // Store-installed Claude claims claude:// through its package manifest, and Windows prefers
@@ -196,6 +195,9 @@ const CAPABILITIES_KEY: &str = r"Software\ClaudeManager\Capabilities";
 const REGISTERED_APPS_KEY: &str = r"Software\RegisteredApplications";
 const USER_CHOICE_KEY: &str =
     r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\claude\UserChoice";
+/// Newer Windows 11 builds store the choice here (value `ProgId`) instead.
+const USER_CHOICE_LATEST_KEY: &str =
+    r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\claude\UserChoiceLatest\ProgId";
 
 /// Register `command` (which must contain `"%1"`) as a handler Windows can offer for claude://.
 pub fn register_url_handler(command: &str, icon: &str) -> io::Result<()> {
@@ -231,7 +233,10 @@ pub fn unregister_url_handler() -> io::Result<()> {
 
 /// The ProgID the user picked for claude:// in Windows, if any.
 pub fn url_user_choice() -> Option<String> {
-    get_string(USER_CHOICE_KEY, "ProgId").ok().flatten()
+    get_string(USER_CHOICE_LATEST_KEY, "ProgId")
+        .ok()
+        .flatten()
+        .or_else(|| get_string(USER_CHOICE_KEY, "ProgId").ok().flatten())
 }
 
 /// True when Windows will hand claude:// links to us.

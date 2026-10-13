@@ -19,7 +19,8 @@ fn is_ours(cmd: &str) -> bool {
 
 /// Point `claude://` at us when routing is on. Returns true if the handler had to be changed.
 pub fn ensure(model: &mut AppModel) -> bool {
-    if !model.settings.deep_link_broker {
+    // The packaged build declares claude:// in its manifest; there's nothing to write.
+    if !model.settings.deep_link_broker || crate::app::packaged() {
         return false;
     }
     let Some(ours) = our_command() else {
@@ -54,6 +55,10 @@ pub fn ensure(model: &mut AppModel) -> bool {
 
 /// Give `claude://` back to Claude Desktop.
 pub fn restore(model: &mut AppModel) {
+    if crate::app::packaged() {
+        model.notify_info("Sign-in links go to whichever app Windows has chosen for claude://.");
+        return;
+    }
     let fallback = model
         .install
         .as_ref()
@@ -72,6 +77,9 @@ pub fn restore(model: &mut AppModel) {
 /// Whether Windows actually sends claude:// links to us. For Store-installed Claude that needs
 /// the user's choice in Default apps; for the classic installer the plain key is enough.
 pub fn routing_active(store_install: bool) -> bool {
+    if crate::app::packaged() {
+        return cm_win::package::owns_url_choice();
+    }
     if registry::url_handler_is_ours() {
         return true;
     }
@@ -86,10 +94,13 @@ pub fn routing_active(store_install: bool) -> bool {
 
 /// Open Windows' Default apps page for Claude Manager, where the user picks it for claude://.
 pub fn open_default_apps() {
-    let uri = "ms-settings:defaultapps?registeredAppUser=Claude%20Manager";
+    let uri = match cm_win::package::app_user_model_id() {
+        Some(aumid) => format!("ms-settings:defaultapps?registeredAUMID={aumid}"),
+        None => "ms-settings:defaultapps?registeredAppUser=Claude%20Manager".into(),
+    };
     if let Err(e) = cm_win::process::spawn_hidden(
         std::path::Path::new("cmd.exe"),
-        &["/c".into(), "start".into(), String::new(), uri.into()],
+        &["/c".into(), "start".into(), String::new(), uri],
     ) {
         tracing::warn!("couldn't open Default apps: {e}");
     }

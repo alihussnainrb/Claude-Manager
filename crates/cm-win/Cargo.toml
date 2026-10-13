@@ -13,6 +13,8 @@ tracing.workspace = true
 version = "0.62"
 features = [
     "ApplicationModel",
+    "ApplicationModel_Activation",
+    "Foundation",
     "Foundation_Collections",
     "Management_Deployment",
     "Wdk_System_Threading",

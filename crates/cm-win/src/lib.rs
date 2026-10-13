@@ -5,6 +5,7 @@
 pub mod appx;
 pub mod ipc;
 pub mod msgthread;
+pub mod package;
 pub mod process;
 pub mod registry;
 pub mod shell;

@@ -230,7 +230,7 @@ impl SettingsView {
                         false,
                         p,
                     ))
-                    .child(set_row(
+                    .when(!crate::app::packaged(), |this| this.child(set_row(
                         "Update automatically",
                         Some(div().child("Downloads new versions from GitHub and installs them while Claude Manager is in the tray. Claude windows keep running.").into_any_element()),
                         toggle("check-updates", s.check_for_updates, p).on_click(cx.listener(|this, _, _, cx| {
@@ -241,7 +241,7 @@ impl SettingsView {
                         })),
                         false,
                         p,
-                    )),
+                    ))),
             )
     }
 
@@ -451,6 +451,7 @@ impl SettingsView {
         use crate::updater::UpdateState;
         let state = self.model.read(cx).update.clone();
         let (status, action): (String, Option<(&'static str, bool)>) = match &state {
+            _ if crate::app::packaged() => ("Updates come from the Microsoft Store.".into(), None),
             UpdateState::Idle => (
                 "Updates come from GitHub Releases.".into(),
                 Some(("Check for updates", false)),
