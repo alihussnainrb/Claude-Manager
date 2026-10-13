@@ -25,6 +25,13 @@ pub fn ensure(model: &mut AppModel) -> bool {
     let Some(ours) = our_command() else {
         return false;
     };
+    // Offer ourselves as a claude:// handler Windows can pick (needed for Store-installed
+    // Claude, whose package registration beats the plain key below).
+    if let Ok(exe) = std::env::current_exe()
+        && let Err(e) = registry::register_url_handler(&ours, &format!("{},0", exe.display()))
+    {
+        tracing::warn!("couldn't register as a claude:// handler: {e}");
+    }
     let current = registry::protocol_handler().ok().flatten();
     if current.as_deref().is_some_and(is_ours) {
         return false;
@@ -55,18 +62,37 @@ pub fn restore(model: &mut AppModel) {
         model.notify_error("Claude Desktop wasn't found, so its handler couldn't be restored.");
         return;
     };
+    let _ = registry::unregister_url_handler();
     match registry::set_protocol_handler(&cmd) {
         Ok(()) => model.notify_info("Sign-in links go straight to Claude again."),
         Err(e) => model.notify_error(format!("Couldn't restore Claude's handler: {e}")),
     }
 }
 
-pub fn handler_is_ours() -> bool {
-    registry::protocol_handler()
-        .ok()
-        .flatten()
-        .as_deref()
-        .is_some_and(is_ours)
+/// Whether Windows actually sends claude:// links to us. For Store-installed Claude that needs
+/// the user's choice in Default apps; for the classic installer the plain key is enough.
+pub fn routing_active(store_install: bool) -> bool {
+    if registry::url_handler_is_ours() {
+        return true;
+    }
+    !store_install
+        && registry::url_user_choice().is_none()
+        && registry::protocol_handler()
+            .ok()
+            .flatten()
+            .as_deref()
+            .is_some_and(is_ours)
+}
+
+/// Open Windows' Default apps page for Claude Manager, where the user picks it for claude://.
+pub fn open_default_apps() {
+    let uri = "ms-settings:defaultapps?registeredAppUser=Claude%20Manager";
+    if let Err(e) = cm_win::process::spawn_hidden(
+        std::path::Path::new("cmd.exe"),
+        &["/c".into(), "start".into(), String::new(), uri.into()],
+    ) {
+        tracing::warn!("couldn't open Default apps: {e}");
+    }
 }
 
 /// Watch the handler key; Claude rewrites it when it starts.

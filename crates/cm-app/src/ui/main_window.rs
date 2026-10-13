@@ -923,10 +923,23 @@ impl MainView {
             )
             .child(install)
             .child(sep())
-            .child(if m.settings.deep_link_broker {
-                "Sign-in routing on"
+            .child(if !m.settings.deep_link_broker {
+                div().child("Sign-in routing off").into_any_element()
+            } else if crate::broker::routing_active(m.store_install()) {
+                div().child("Sign-in routing on").into_any_element()
             } else {
-                "Sign-in routing off"
+                // Windows still sends claude:// to Claude: one click to fix it.
+                h_flex()
+                    .id("routing-setup")
+                    .gap(px(5.))
+                    .items_center()
+                    .text_color(c(p.warn))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .cursor_pointer()
+                    .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx)))
+                    .child(icon(IconName::TriangleAlert, 12., c(p.warn)))
+                    .child("Sign-in routing needs one step")
+                    .into_any_element()
             })
             .child(sep())
             .child(format!("{} running", m.running_count()))

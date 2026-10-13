@@ -185,6 +185,9 @@ fn uninstall(paths: &cm_core::paths::Paths) {
     {
         tracing::error!("couldn't restore the claude:// handler: {e}");
     }
+    if let Err(e) = cm_win::registry::unregister_url_handler() {
+        tracing::error!("couldn't remove the claude:// handler registration: {e}");
+    }
     if let Err(e) = cm_win::registry::set_run_entry(None) {
         tracing::error!("couldn't remove the startup entry: {e}");
     }

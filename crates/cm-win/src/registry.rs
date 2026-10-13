@@ -182,6 +182,73 @@ pub fn wait_for_change(subkey: &str) -> io::Result<()> {
     Ok(())
 }
 
+
+// ---- Registered URL handler -----------------------------------------------------------------
+//
+// Store-installed Claude claims claude:// through its package manifest, and Windows prefers
+// that over `Software\Classes\claude`. The supported way in is to register as a handler
+// (ProgID + Capabilities + RegisteredApplications), then let the user pick us once in
+// Windows' Default apps; their choice lands in UserChoice, which wins over everything.
+
+pub const URL_PROGID: &str = "ClaudeManager.claude";
+pub const APP_NAME: &str = "Claude Manager";
+const CAPABILITIES_KEY: &str = r"Software\ClaudeManager\Capabilities";
+const REGISTERED_APPS_KEY: &str = r"Software\RegisteredApplications";
+const USER_CHOICE_KEY: &str =
+    r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\claude\UserChoice";
+
+/// Register `command` (which must contain `"%1"`) as a handler Windows can offer for claude://.
+pub fn register_url_handler(command: &str, icon: &str) -> io::Result<()> {
+    let progid = format!(r"Software\Classes\{URL_PROGID}");
+    set_string(&progid, "", "Claude sign-in link")?;
+    set_string(&progid, "URL Protocol", "")?;
+    set_string(&format!(r"{progid}\DefaultIcon"), "", icon)?;
+    set_string(&format!(r"{progid}\shell\open\command"), "", command)?;
+    set_string(
+        &format!(r"{progid}\Application"),
+        "ApplicationName",
+        APP_NAME,
+    )?;
+    set_string(CAPABILITIES_KEY, "ApplicationName", APP_NAME)?;
+    set_string(
+        CAPABILITIES_KEY,
+        "ApplicationDescription",
+        "Sends each Claude sign-in to the profile that asked for it.",
+    )?;
+    set_string(
+        &format!(r"{CAPABILITIES_KEY}\UrlAssociations"),
+        "claude",
+        URL_PROGID,
+    )?;
+    set_string(REGISTERED_APPS_KEY, APP_NAME, CAPABILITIES_KEY)
+}
+
+pub fn unregister_url_handler() -> io::Result<()> {
+    delete_value(REGISTERED_APPS_KEY, APP_NAME)?;
+    delete_tree(r"Software\ClaudeManager")?;
+    delete_tree(&format!(r"Software\Classes\{URL_PROGID}"))
+}
+
+/// The ProgID the user picked for claude:// in Windows, if any.
+pub fn url_user_choice() -> Option<String> {
+    get_string(USER_CHOICE_KEY, "ProgId").ok().flatten()
+}
+
+/// True when Windows will hand claude:// links to us.
+pub fn url_handler_is_ours() -> bool {
+    url_user_choice().as_deref() == Some(URL_PROGID)
+}
+
+fn delete_tree(subkey: &str) -> io::Result<()> {
+    use windows::Win32::System::Registry::RegDeleteTreeW;
+    let sub = wide(subkey);
+    let rc = unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, PCWSTR(sub.as_ptr())) };
+    if rc != ERROR_SUCCESS && rc != ERROR_FILE_NOT_FOUND {
+        return Err(err(rc));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

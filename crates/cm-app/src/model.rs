@@ -172,6 +172,13 @@ impl AppModel {
             .collect()
     }
 
+    /// Claude from the Microsoft Store (its package registration owns claude:// by default).
+    pub fn store_install(&self) -> bool {
+        self.install
+            .as_ref()
+            .is_none_or(|i| matches!(i.kind, cm_win::appx::InstallKind::Msix { .. }))
+    }
+
     pub fn running_count(&self) -> usize {
         self.runtime.len()
     }
@@ -309,12 +316,24 @@ impl AppModel {
             return;
         };
         let visible = rt.windows.iter().copied().find(|w| w.is_alive());
-        let focused = visible.is_some_and(cm_win::window::focus);
-        if !focused {
-            // Hidden in Claude's own tray: a second launch with the same folder makes the
-            // running instance show its window, then exits.
-            self.handoff(id, None);
-        }
+        // Hidden in Claude's own tray: a second launch with the same folder makes the running
+        // instance show its window, then exits.
+        let fallback = self
+            .profile(id)
+            .cloned()
+            .zip(self.install.clone())
+            .map(|(p, install)| {
+                let (args, env) = self.launch_args(&p);
+                (install.exe, args, env)
+            });
+        // Off the UI thread: focusing makes Windows send activation messages straight back into
+        // our own windows, which must not arrive while GPUI is mid-update.
+        std::thread::spawn(move || {
+            let focused = visible.is_some_and(cm_win::window::focus);
+            if !focused && let Some((exe, args, env)) = fallback {
+                let _ = cm_win::process::spawn(&exe, &args, &env);
+            }
+        });
         self.note_focus(id);
     }
 

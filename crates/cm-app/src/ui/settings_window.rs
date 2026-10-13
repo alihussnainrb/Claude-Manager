@@ -325,7 +325,7 @@ impl SettingsView {
     fn routing(&self, p: &Palette, cx: &mut Context<Self>) -> Div {
         let m = self.model.read(cx);
         let on = m.settings.deep_link_broker;
-        let ours = crate::broker::handler_is_ours();
+        let ours = crate::broker::routing_active(m.store_install());
         let reclaims = m.protocol_reclaims;
         let status = if on && ours {
             let extra = if reclaims > 0 {
@@ -343,8 +343,7 @@ impl SettingsView {
         } else if on {
             Some((
                 false,
-                "Sign-in links aren't reaching Claude Manager yet. Reopen the app to retry."
-                    .to_string(),
+                "Windows is still sending sign-in links straight to Claude. Choose Claude Manager for claude:// links once, and routing takes over.".to_string(),
             ))
         } else {
             None
@@ -386,7 +385,13 @@ impl SettingsView {
                             .bg(crate::theme::ca(color, 0.11))
                             .text_size(px(12.))
                             .child(icon(if good { IconName::CircleCheck } else { IconName::TriangleAlert }, 15., c(color)))
-                            .child(text),
+                            .child(div().flex_1().min_w_0().child(text))
+                            .when(!good, |this| {
+                                this.child(
+                                    button("choose-handler", "Choose in Windows", Some(IconName::ExternalLink), Btn::Primary, true, p)
+                                        .on_click(|_, _, _| crate::broker::open_default_apps()),
+                                )
+                            }),
                     )
                 })
                 .child(set_row(
